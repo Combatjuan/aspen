@@ -66,7 +66,7 @@ where
     W: Clone + Send + Sync + 'static,
 {
     /// The task which is to be run.
-    func: Arc<Fn(W) -> Status + Send + Sync>,
+    func: Arc<dyn Fn(W) -> Status + Send + Sync>,
 
     /// Channel on which the task will communicate.
     rx: Option<mpsc::Receiver<Status>>,
@@ -219,7 +219,7 @@ macro_rules! Action {
 /// ```
 pub struct InlineAction<'a, W> {
     /// The task which is to be run.
-    func: Box<FnMut(&mut W) -> Status + 'a>,
+    func: Box<dyn FnMut(&mut W) -> Status + 'a>,
 }
 impl<'a, W> InlineAction<'a, W>
 where

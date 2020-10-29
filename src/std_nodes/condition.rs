@@ -44,7 +44,7 @@ pub struct Condition<'a, W> {
     ///
     /// A return value of `true` means success and a return value of `false`
     /// means failure.
-    func: Box<Fn(&W) -> bool + 'a>,
+    func: Box<dyn Fn(&W) -> bool + 'a>,
 }
 impl<'a, W> Condition<'a, W>
 where

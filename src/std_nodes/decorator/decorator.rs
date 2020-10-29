@@ -43,7 +43,7 @@ use crate::status::Status;
 /// ```
 pub struct Decorator<'a, W> {
     /// Function that is performed on the child's status.
-    func: Box<Fn(Status, &W) -> Status + 'a>,
+    func: Box<dyn Fn(Status, &W) -> Status + 'a>,
 
     /// Child node.
     child: Node<'a, W>,
