@@ -3,6 +3,8 @@
 use crate::status::Status;
 use std::fmt;
 
+static mut INDENT : u32 = 0;
+
 /// Represents a generic node.
 ///
 /// The logic of the node is controlled by the supplied `Tickable` object.
@@ -17,7 +19,7 @@ pub struct Node<'a, W> {
     status: Option<Status>,
 
     /// The internal logic for this node.
-    internals: Box<Tickable<W> + 'a>,
+    internals: Box<dyn Tickable<W> + 'a>,
 
     /// The name for this node.
     ///
@@ -122,11 +124,19 @@ impl<'a, W> Tickable<W> for Node<'a, W> {
 
 impl<'a, W> fmt::Display for Node<'a, W> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:( status = {:?}", self.name(), self.status())?;
-        for child in self.children() {
-            write!(f, ", {}", child)?;
-        }
-        write!(f, " )")
+        write!(f, "{}:( {:?}", self.name(), self.status())?;
+		unsafe {
+			INDENT += 1;
+			for child in self.children() {
+				write!(f, ",\n")?;
+				for _i in 0..INDENT {
+					write!(f, "	")?;
+				}
+				write!(f, "{}", child)?;
+			}
+			INDENT -= 1;
+		}
+		write!(f, " )")
     }
 }
 
