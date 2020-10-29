@@ -39,9 +39,9 @@ use crate::status::Status;
 ///
 /// // Subtract one since there is a run in the assert
 /// for _ in 0..(run_limit - 1) {
-///     assert_eq!(node.tick(&mut ()), Status::Running);
+///     assert_eq!(node.tick(&mut (), 0), Status::Running);
 /// }
-/// assert_eq!(node.tick(&mut ()), Status::Succeeded);
+/// assert_eq!(node.tick(&mut (), 0), Status::Succeeded);
 /// ```
 pub struct Repeat<'a, W> {
     /// Child node.
@@ -52,6 +52,8 @@ pub struct Repeat<'a, W> {
 
     /// Number of times the child has been reset.
     attempts: u32,
+
+	last_tick: usize,
 }
 impl<'a, W> Repeat<'a, W>
 where
@@ -63,6 +65,7 @@ where
             child: child,
             attempt_limit: None,
             attempts: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
@@ -76,21 +79,23 @@ where
             child: child,
             attempt_limit: Some(limit),
             attempts: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for Repeat<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // Take care of the infinite version so we don't have to worry
         if self.attempt_limit.is_none() {
-            self.child.tick(world);
+            self.child.tick(world, tick);
             return Status::Running;
         }
 
         // We're using the finite version
         let limit = self.attempt_limit.unwrap();
-        let child_status = self.child.tick(world);
+        let child_status = self.child.tick(world, tick);
 
         if child_status.is_done() {
             self.attempts += 1;
@@ -161,9 +166,9 @@ mod tests {
         let child = CountedTick::new(Status::Failed, limit, true);
         let mut node = Repeat::with_limit(limit, child);
         for _ in 0..(limit - 1) {
-            assert_eq!(node.tick(&mut ()), Status::Running);
+            assert_eq!(node.tick(&mut (), 0), Status::Running);
         }
-        let status = node.tick(&mut ());
+        let status = node.tick(&mut (), 0);
         drop(node);
         assert_eq!(status, Status::Succeeded);
     }

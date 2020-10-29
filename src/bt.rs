@@ -26,13 +26,13 @@ impl<'a, W> BehaviorTree<'a, W> {
     /// If the tree has already been completed, ticking it again will reset it.
     /// When the tree is reset, it will return an `Initialized` status a single
     /// time.
-    pub fn tick(&mut self, world: &mut W) -> Status {
+    pub fn tick(&mut self, world: &mut W, tick: usize) -> Status {
         match self.root.status() {
-            None | Some(Status::Running) => self.root.tick(world),
+            None | Some(Status::Running) => self.root.tick(world, tick),
             Some(Status::Failed) | Some(Status::Succeeded) => {
                 debug!("Tree reset via ticking");
                 self.root.reset();
-                self.root.tick(world)
+                self.root.tick(world, tick)
             }
         }
     }
@@ -58,10 +58,12 @@ impl<'a, W> BehaviorTree<'a, W> {
     where
         F: FnMut(&BehaviorTree<'a, W>),
     {
+		let mut tick_count : usize = 0;
+
         // Deal with the "special" case of a zero frequency
         if freq == 0.0f64 {
             debug!("Zero frequency specified, ticking once");
-            let status = self.tick(world);
+            let status = self.tick(world, tick_count);
             if let Some(ref mut f) = hook {
                 f(self);
             }
@@ -83,7 +85,7 @@ impl<'a, W> BehaviorTree<'a, W> {
             let now = Instant::now();
 
             trace!("Ticking tree");
-            status = self.tick(world);
+            status = self.tick(world, tick_count);
             if let Some(ref mut f) = hook {
                 f(self);
             }
@@ -106,6 +108,7 @@ impl<'a, W> BehaviorTree<'a, W> {
                     );
                 }
             }
+			tick_count += 1;
         }
 
         return status;

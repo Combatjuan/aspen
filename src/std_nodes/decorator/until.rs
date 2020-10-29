@@ -37,10 +37,10 @@ use crate::status::Status;
 /// let mut node = UntilFail::new(child);
 ///
 /// for mut x in 0..10 {
-///     assert_eq!(node.tick(&mut x), Status::Running);
+///     assert_eq!(node.tick(&mut x, 0), Status::Running);
 /// }
 ///
-/// assert_eq!(node.tick(&mut 11), Status::Succeeded);
+/// assert_eq!(node.tick(&mut 11, 0), Status::Succeeded);
 /// ```
 ///
 /// An `UntilFail` node will fail if the child doesn't within the limit:
@@ -55,10 +55,10 @@ use crate::status::Status;
 ///
 /// // Subtract one since our final assert counts as a try
 /// for _ in 0..(tries - 1) {
-///     assert_eq!(node.tick(&mut ()), Status::Running);
+///     assert_eq!(node.tick(&mut (), 0), Status::Running);
 /// }
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Failed);
+/// assert_eq!(node.tick(&mut (), 0), Status::Failed);
 /// ```
 pub struct UntilFail<'a, W> {
     /// Child node.
@@ -69,6 +69,8 @@ pub struct UntilFail<'a, W> {
 
     /// Number of times the child has been reset.
     attempts: u32,
+
+	last_tick: usize,
 }
 impl<'a, W> UntilFail<'a, W>
 where
@@ -80,6 +82,7 @@ where
             child: child,
             attempt_limit: None,
             attempts: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
@@ -93,15 +96,17 @@ where
             child: child,
             attempt_limit: Some(limit),
             attempts: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for UntilFail<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // Take care of the infinite version so we don't have to worry
         if self.attempt_limit.is_none() {
-            return if self.child.tick(world) == Status::Failed {
+            return if self.child.tick(world, tick) == Status::Failed {
                 Status::Succeeded
             } else {
                 Status::Running
@@ -110,7 +115,7 @@ impl<'a, W> Tickable<W> for UntilFail<'a, W> {
 
         // We're using the finite version
         let limit = self.attempt_limit.unwrap();
-        let child_status = self.child.tick(world);
+        let child_status = self.child.tick(world, tick);
 
         // It's either check this here or do it at both of the following
         // returns. I'll take here.
@@ -210,10 +215,10 @@ macro_rules! UntilFail {
 /// let mut node = UntilSuccess::new(child);
 ///
 /// for mut x in 0..10 {
-///     assert_eq!(node.tick(&mut x), Status::Running);
+///     assert_eq!(node.tick(&mut x, 0), Status::Running);
 /// }
 ///
-/// assert_eq!(node.tick(&mut 10), Status::Succeeded);
+/// assert_eq!(node.tick(&mut 10, 0), Status::Succeeded);
 /// ```
 ///
 /// An `UntilSuccess` node will fail if the child doesn't succeed within the limit:
@@ -228,10 +233,10 @@ macro_rules! UntilFail {
 ///
 /// // Minus one since our final assert is a run
 /// for _ in 0..(runs - 1) {
-///     assert_eq!(node.tick(&mut ()), Status::Running);
+///     assert_eq!(node.tick(&mut (), 0), Status::Running);
 /// }
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Failed);
+/// assert_eq!(node.tick(&mut (), 0), Status::Failed);
 /// ```
 pub struct UntilSuccess<'a, W> {
     /// Child node.
@@ -242,6 +247,8 @@ pub struct UntilSuccess<'a, W> {
 
     /// Number of times the child has been reset.
     attempts: u32,
+
+	last_tick: usize,
 }
 impl<'a, W> UntilSuccess<'a, W>
 where
@@ -253,6 +260,7 @@ where
             child: child,
             attempt_limit: None,
             attempts: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
@@ -266,15 +274,17 @@ where
             child: child,
             attempt_limit: Some(limit),
             attempts: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for UntilSuccess<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // Take care of the infinite version so we don't have to worry
         if self.attempt_limit.is_none() {
-            return if self.child.tick(world) == Status::Succeeded {
+            return if self.child.tick(world, tick) == Status::Succeeded {
                 Status::Succeeded
             } else {
                 Status::Running
@@ -283,7 +293,7 @@ impl<'a, W> Tickable<W> for UntilSuccess<'a, W> {
 
         // We're using the finite version
         let limit = self.attempt_limit.unwrap();
-        let child_status = self.child.tick(world);
+        let child_status = self.child.tick(world, tick);
 
         // It's either check this here or do it at both of the following
         // returns. I'll take here.
@@ -357,7 +367,7 @@ mod tests {
     fn until_fail_infinite() {
         let child = CountedTick::new(Status::Failed, 1, true);
         let mut node = UntilFail::new(child);
-        let status = node.tick(&mut ());
+        let status = node.tick(&mut (), 0);
         drop(node);
         assert_eq!(status, Status::Succeeded);
     }
@@ -368,9 +378,9 @@ mod tests {
         let child = CountedTick::new(Status::Succeeded, limit, true);
         let mut node = UntilFail::with_limit(limit, child);
         for _ in 0..(limit - 1) {
-            assert_eq!(node.tick(&mut ()), Status::Running);
+            assert_eq!(node.tick(&mut (), 0), Status::Running);
         }
-        let status = node.tick(&mut ());
+        let status = node.tick(&mut (), 0);
         drop(node);
         assert_eq!(status, Status::Failed);
     }
@@ -379,7 +389,7 @@ mod tests {
     fn until_success_infinite() {
         let child = CountedTick::new(Status::Succeeded, 1, true);
         let mut node = UntilSuccess::new(child);
-        let status = node.tick(&mut ());
+        let status = node.tick(&mut (), );
         drop(node);
         assert_eq!(status, Status::Succeeded);
     }
@@ -390,9 +400,9 @@ mod tests {
         let child = CountedTick::new(Status::Failed, limit, true);
         let mut node = UntilSuccess::with_limit(limit, child);
         for _ in 0..(limit - 1) {
-            assert_eq!(node.tick(&mut ()), Status::Running);
+            assert_eq!(node.tick(&mut (), 0), Status::Running);
         }
-        let status = node.tick(&mut ());
+        let status = node.tick(&mut (), 0);
         drop(node);
         assert_eq!(status, Status::Failed);
     }

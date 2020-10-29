@@ -37,14 +37,15 @@ use crate::status::Status;
 /// let mut state = 10u32;
 ///
 /// let mut node = Condition::new(|s| *s > CHECK_VALUE );
-/// assert_eq!(node.tick(&mut state), Status::Failed);
+/// assert_eq!(node.tick(&mut state, 0), Status::Failed);
 /// ```
 pub struct Condition<'a, W> {
     /// Function that is performed to determine the node's status
     ///
     /// A return value of `true` means success and a return value of `false`
     /// means failure.
-    func: Box<dyn Fn(&W) -> bool + 'a>,
+    func: Box<dyn Fn(&W, usize) -> bool + 'a>,
+	last_tick: usize,
 }
 impl<'a, W> Condition<'a, W>
 where
@@ -53,18 +54,20 @@ where
     /// Constructs a new Condition node that will run the given function.
     pub fn new<F>(func: F) -> Node<'a, W>
     where
-        F: Fn(&W) -> bool + 'a,
+        F: Fn(&W, usize) -> bool + 'a,
     {
         let internals = Condition {
             func: Box::new(func),
+			last_tick: 0
         };
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for Condition<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // Otherwise, run the function
-        if (*self.func)(world) {
+        if (*self.func)(world, tick) {
             Status::Succeeded
         } else {
             Status::Failed
@@ -108,12 +111,12 @@ mod tests {
     #[test]
     fn failure() {
         let mut cond = Condition::new(|_| false);
-        assert_eq!(cond.tick(&mut ()), Status::Failed);
+        assert_eq!(cond.tick(&mut (), 0), Status::Failed);
     }
 
     #[test]
     fn success() {
         let mut cond = Condition::new(|_| true);
-        assert_eq!(cond.tick(&mut ()), Status::Succeeded);
+        assert_eq!(cond.tick(&mut (), 0), Status::Succeeded);
     }
 }

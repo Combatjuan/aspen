@@ -25,6 +25,9 @@ pub struct Node<'a, W> {
     ///
     /// If present, it will be used instead of the type name.
     name: Option<String>,
+
+	/// The last iteration this node was ticked
+	last_tick: usize,
 }
 impl<'a, W> Node<'a, W> {
     /// Creates a new `Node` with the given `Tickable`.
@@ -38,6 +41,7 @@ impl<'a, W> Node<'a, W> {
             status: None,
             internals: Box::new(internals),
             name: None,
+			last_tick: 0,
         }
     }
 
@@ -78,11 +82,12 @@ impl<'a, W> Node<'a, W> {
 
 impl<'a, W> Tickable<W> for Node<'a, W> {
     /// Ticks the node a single time.
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
         
         // Tick the internals
         trace!("Ticking node {}", self.name());
-        self.status = Some(self.internals.tick(world));
+        self.status = Some(self.internals.tick(world, tick));
+		self.last_tick = tick;
         return self.status.unwrap();
     }
 
@@ -124,7 +129,11 @@ impl<'a, W> Tickable<W> for Node<'a, W> {
 
 impl<'a, W> fmt::Display for Node<'a, W> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}:( {:?}", self.name(), self.status())?;
+        write!(f, "{}-{}:({:?}",
+			self.name(),
+			self.last_tick,
+			self.status()
+		)?;
 		unsafe {
 			INDENT += 1;
 			for child in self.children() {
@@ -153,7 +162,7 @@ pub trait Tickable<W> {
     ///
     /// In other words, the `Tickable` will only ever be ticked when the node
     /// state is either `Status::Running` or `Status::Initialized`.
-    fn tick(&mut self, world: &mut W) -> Status;
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status;
 
     /// Resets the internal state of the node.
     ///

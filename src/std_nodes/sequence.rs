@@ -51,7 +51,7 @@ use crate::Status;
 /// 	.with_child(AlwaysSucceed::new())
 /// 	.with_child(AlwaysSucceed::new());
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Succeeded);
+/// assert_eq!(node.tick(&mut (), 0), Status::Succeeded);
 /// ```
 ///
 /// A node that returns it is running:
@@ -65,7 +65,7 @@ use crate::Status;
 ///     .with_child(AlwaysRunning::new())
 ///     .with_child(AlwaysFail::new());
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Running);
+/// assert_eq!(node.tick(&mut (), 0), Status::Running);
 /// ```
 ///
 /// A node that returns it failed:
@@ -79,26 +79,22 @@ use crate::Status;
 ///     .with_child(AlwaysSucceed::new())
 ///     .with_child(AlwaysFail::new());
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Failed);
+/// assert_eq!(node.tick(&mut (), 0), Status::Failed);
 /// ```
 pub struct ActiveSequence<'a, W> {
     /// Vector containing the children of this node.
     children: Vec<Node<'a, W>>,
+	last_tick: usize,
 }
 impl<'a, W> ActiveSequence<'a, W>
 where
     W: 'a,
 {
-    ///// Creates a new `ActiveSequence` node from a vector of Nodes.
-    //pub fn new() -> Self {
-        //ActiveSequence {
-            //children: Vec::new(),
-        //}
-    //}
     /// Creates a new `ActiveSequence` node from a vector of Nodes.
     pub fn new(children: Vec<Node<'a, W>>) -> Node<'a, W> {
         let internals = ActiveSequence {
             children: children,
+			last_tick: 0,
         };
         Node::new(internals)
     }
@@ -120,12 +116,13 @@ where
     }
 }
 impl<'a, W> Tickable<W> for ActiveSequence<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
         // Tick all of our children as long as they succeed
+		self.last_tick = tick;
         let mut ret_status = Status::Succeeded;
         for child in self.children.iter_mut() {
             if ret_status == Status::Succeeded {
-                ret_status = child.tick(world);
+                ret_status = child.tick(world, tick);
             } else {
                 child.reset();
             }
@@ -219,7 +216,7 @@ macro_rules! ActiveSequence
 ///     AlwaysSucceed::new(),
 ///     AlwaysSucceed::new()
 /// ]);
-/// assert_eq!(node.tick(&mut ()), Status::Succeeded);
+/// assert_eq!(node.tick(&mut (), 0), Status::Succeeded);
 /// ```
 ///
 /// A node that returns it is running:
@@ -233,7 +230,7 @@ macro_rules! ActiveSequence
 ///     AlwaysRunning::new(),
 ///     AlwaysFail::new()
 /// ]);
-/// assert_eq!(node.tick(&mut ()), Status::Running);
+/// assert_eq!(node.tick(&mut (), 0), Status::Running);
 /// ```
 ///
 /// A node that returns it failed:
@@ -247,12 +244,13 @@ macro_rules! ActiveSequence
 ///     AlwaysSucceed::new(),
 ///     AlwaysFail::new()
 /// ]);
-/// assert_eq!(node.tick(&mut ()), Status::Failed);
+/// assert_eq!(node.tick(&mut (), 0), Status::Failed);
 /// ```
 pub struct Sequence<'a, W> {
     /// Vector containing the children of this node.
     children: Vec<Node<'a, W>>,
     next_child: usize,
+	last_tick: usize,
 }
 impl<'a, W> Sequence<'a, W>
 where
@@ -263,16 +261,18 @@ where
         let internals = Sequence {
             children: children,
             next_child: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for Sequence<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // Tick the children as long as they keep failing
         let mut ret_status = Status::Succeeded;
         while self.next_child < self.children.len() && ret_status == Status::Succeeded {
-            ret_status = self.children[self.next_child].tick(world);
+            ret_status = self.children[self.next_child].tick(world, tick);
 
             if ret_status.is_done() {
                 self.next_child += 1;
@@ -342,7 +342,7 @@ mod tests {
         let mut seq = Sequence::new(children);
 
         // Tick the sequence
-        let status = seq.tick(&mut ());
+        let status = seq.tick(&mut (), 0);
 
         // Drop the sequence so the nodes can do their own checks
         drop(seq);
@@ -363,7 +363,7 @@ mod tests {
         let mut seq = Sequence::new(children);
 
         // Tick the sequence
-        let status = seq.tick(&mut ());
+        let status = seq.tick(&mut (), 0);
 
         // Drop the sequence so the nodes can do their own checks
         drop(seq);
@@ -385,7 +385,7 @@ mod tests {
         let mut seq = Sequence::new(children);
 
         // Tick the sequence
-        let status = seq.tick(&mut ());
+        let status = seq.tick(&mut (), 0);
 
         // Drop the sequence so the nodes can do their own checks
         drop(seq);
@@ -407,7 +407,7 @@ mod tests {
         let mut seq = ActiveSequence::new().with_children(children);
 
         // Tick the sequence
-        let status = seq.tick(&mut ());
+        let status = seq.tick(&mut (), 0);
 
         // Drop the sequence so the nodes can do their own checks
         drop(seq);
@@ -428,7 +428,7 @@ mod tests {
         let mut seq = ActiveSequence::new().with_children(children);
 
         // Tick the sequence
-        let status = seq.tick(&mut ());
+        let status = seq.tick(&mut (), 0);
 
         // Drop the sequence so the nodes can do their own checks
         drop(seq);
@@ -450,7 +450,7 @@ mod tests {
         let mut seq = ActiveSequence::new().with_children(children);
 
         // Tick the sequence
-        let status = seq.tick(&mut ());
+        let status = seq.tick(&mut (), 0);
 
         // Drop the sequence so the nodes can do their own checks
         drop(seq);

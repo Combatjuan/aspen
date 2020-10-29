@@ -51,7 +51,7 @@ use crate::Status;
 ///     AlwaysSucceed::new(),
 ///     AlwaysRunning::new()
 /// ]);
-/// assert_eq!(node.tick(&mut ()), Status::Succeeded);
+/// assert_eq!(node.tick(&mut (), 0), Status::Succeeded);
 /// ```
 ///
 /// A node that returns that it is running:
@@ -65,7 +65,7 @@ use crate::Status;
 ///     AlwaysRunning::new(),
 ///     AlwaysSucceed::new()
 /// ]);
-/// assert_eq!(node.tick(&mut ()), Status::Running);
+/// assert_eq!(node.tick(&mut (), 0), Status::Running);
 /// ```
 ///
 /// A node that returns that it fails:
@@ -79,11 +79,13 @@ use crate::Status;
 ///     AlwaysFail::new(),
 ///     AlwaysFail::new()
 /// ]);
-/// assert_eq!(node.tick(&mut ()), Status::Failed);
+/// assert_eq!(node.tick(&mut (), 0), Status::Failed);
 /// ```
 pub struct Selector<'a, W> {
     /// Vector containing the children of this node.
     children: Vec<Node<'a, W>>,
+
+	last_tick: usize,
 }
 impl<'a, W> Selector<'a, W>
 where
@@ -91,12 +93,16 @@ where
 {
     /// Creates a new Selector node from a vector of Nodes.
     pub fn new(children: Vec<Node<'a, W>>) -> Node<'a, W> {
-        let internals = Selector { children: children };
+        let internals = Selector {
+			children: children,
+			last_tick: 0,
+		};
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for Selector<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // Tick the children in order
         let mut ret_status = Status::Failed;
         for child in self.children.iter_mut() {
@@ -106,7 +112,7 @@ impl<'a, W> Tickable<W> for Selector<'a, W> {
             if ret_status != Status::Failed {
                 child.reset()
             } else {
-                ret_status = child.tick(world);
+                ret_status = child.tick(world, tick);
             }
         }
 
@@ -236,6 +242,8 @@ pub struct StatefulSelector<'a, W> {
     /// While it feels less Rusty, doing an index seemed cleaner than any
     /// iterator version that I could come up with.
     next_child: usize,
+
+	last_tick: usize,
 }
 impl<'a, W> StatefulSelector<'a, W>
 where
@@ -246,6 +254,7 @@ where
         let internals = StatefulSelector {
             children: children,
             next_child: 0,
+			last_tick: 0,
         };
         Node::new(internals)
     }
@@ -254,11 +263,12 @@ impl<'a, W> Tickable<W> for StatefulSelector<'a, W>
 where
     W: Clone,
 {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // Tick the children as long as they keep failing
         let mut ret_status = Status::Failed;
         while self.next_child < self.children.len() && ret_status == Status::Failed {
-            ret_status = self.children[self.next_child].tick(world);
+            ret_status = self.children[self.next_child].tick(world, tick);
 
             if ret_status.is_done() {
                 self.next_child += 1;
@@ -328,7 +338,7 @@ mod tests {
         let mut sel = StatefulSelector::new(children);
 
         // Tick the seluence
-        let status = sel.tick(&mut ());
+        let status = sel.tick(&mut (), 0);
 
         // Drop the selector so the nodes can do their own checks
         drop(sel);
@@ -350,7 +360,7 @@ mod tests {
         let mut sel = StatefulSelector::new(children);
 
         // Tick the seluence
-        let status = sel.tick(&mut ());
+        let status = sel.tick(&mut (), 0);
 
         // Drop the selector so the nodes can do their own checks
         drop(sel);
@@ -368,7 +378,7 @@ mod tests {
         let mut sel = StatefulSelector::new(children);
 
         // Tick the seluence
-        let status = sel.tick(&mut ());
+        let status = sel.tick(&mut (), 0);
 
         // Drop the selector so the nodes can do their own checks
         drop(sel);
@@ -390,7 +400,7 @@ mod tests {
         let mut sel = Selector::new(children);
 
         // Tick the seluence
-        let status = sel.tick(&mut ());
+        let status = sel.tick(&mut (), 0);
 
         // Drop the selector so the nodes can do their own checks
         drop(sel);
@@ -412,7 +422,7 @@ mod tests {
         let mut sel = Selector::new(children);
 
         // Tick the seluence
-        let status = sel.tick(&mut ());
+        let status = sel.tick(&mut (), 0);
 
         // Drop the selector so the nodes can do their own checks
         drop(sel);
@@ -430,7 +440,7 @@ mod tests {
         let mut sel = Selector::new(children);
 
         // Tick the seluence
-        let status = sel.tick(&mut ());
+        let status = sel.tick(&mut (), 0);
 
         // Drop the selector so the nodes can do their own checks
         drop(sel);

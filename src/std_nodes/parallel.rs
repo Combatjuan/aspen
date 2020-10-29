@@ -56,7 +56,7 @@ use crate::status::Status;
 ///     AlwaysFail::new()
 /// ]);
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Succeeded);
+/// assert_eq!(node.tick(&mut (), 0), Status::Succeeded);
 /// ```
 ///
 /// A node that could either succeed or fail, so it is still running:
@@ -74,7 +74,7 @@ use crate::status::Status;
 ///     AlwaysFail::new()
 /// ]);
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Running);
+/// assert_eq!(node.tick(&mut (), 0), Status::Running);
 /// ```
 ///
 /// A node that could not possibly succeed, so it fails:
@@ -92,7 +92,7 @@ use crate::status::Status;
 ///     AlwaysFail::new()
 /// ]);
 ///
-/// assert_eq!(node.tick(&mut ()), Status::Failed);
+/// assert_eq!(node.tick(&mut (), 0), Status::Failed);
 /// ```
 pub struct Parallel<'a, W> {
     /// Child nodes.
@@ -100,6 +100,8 @@ pub struct Parallel<'a, W> {
 
     /// Number of child nodes required to succeed.
     required_successes: usize,
+
+	last_tick: usize
 }
 impl<'a, W> Parallel<'a, W>
 where
@@ -110,14 +112,17 @@ where
         let internals = Parallel {
             children: children,
             required_successes: required_successes,
+			last_tick: 0,
         };
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for Parallel<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
         let mut successes = 0;
         let mut failures = 0;
+
+		self.last_tick = tick;
 
         // Go through all the children to determine success or failure
         for child in self.children.iter_mut() {
@@ -125,7 +130,7 @@ impl<'a, W> Tickable<W> for Parallel<'a, W> {
             let s = match child.status() {
                 Some(Status::Succeeded) => Status::Succeeded,
                 Some(Status::Failed) => Status::Failed,
-                _ => child.tick(world),
+                _ => child.tick(world, tick),
             };
 
             if s == Status::Succeeded {
@@ -208,7 +213,7 @@ mod tests {
             YesTick::new(Status::Failed),
         ];
         let mut parallel = Parallel::new(2, children);
-        let status = parallel.tick(&mut ());
+        let status = parallel.tick(&mut (), 0);
         drop(parallel);
         assert_eq!(status, Status::Succeeded);
     }
@@ -224,7 +229,7 @@ mod tests {
             YesTick::new(Status::Failed),
         ];
         let mut parallel = Parallel::new(5, children);
-        let status = parallel.tick(&mut ());
+        let status = parallel.tick(&mut (), 0);
         drop(parallel);
         assert_eq!(status, Status::Failed);
     }
@@ -240,7 +245,7 @@ mod tests {
             YesTick::new(Status::Failed),
         ];
         let mut parallel = Parallel::new(3, children);
-        let status = parallel.tick(&mut ());
+        let status = parallel.tick(&mut (), 0);
         drop(parallel);
         assert_eq!(status, Status::Running);
     }

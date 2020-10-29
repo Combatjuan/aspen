@@ -39,14 +39,16 @@ use crate::status::Status;
 ///
 /// let child = AlwaysSucceed::new();
 /// let mut node = Decorator::new(child, invert);
-/// assert_eq!(node.tick(&mut ()), Status::Failed);
+/// assert_eq!(node.tick(&mut (), 0), Status::Failed);
 /// ```
 pub struct Decorator<'a, W> {
     /// Function that is performed on the child's status.
-    func: Box<dyn Fn(Status, &W) -> Status + 'a>,
+    func: Box<dyn Fn(Status, &W, usize) -> Status + 'a>,
 
     /// Child node.
     child: Node<'a, W>,
+
+	last_tick: usize
 }
 impl<'a, W> Decorator<'a, W>
 where
@@ -56,21 +58,23 @@ where
     /// to be run on the child's status.
     pub fn new<F>(child: Node<'a, W>, func: F) -> Node<'a, W>
     where
-        F: Fn(Status, &W) -> Status + 'a,
+        F: Fn(Status, &W, usize) -> Status + 'a,
     {
         let internals = Decorator {
             func: Box::new(func),
             child: child,
+			last_tick: 0,
         };
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for Decorator<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         // If the child has already run, this shouldn't change results since it will
         // just return its last status
-        let child_status = self.child.tick(world);
-        (*self.func)(child_status, world)
+        let child_status = self.child.tick(world, tick);
+        (*self.func)(child_status, world, tick)
     }
 
     fn reset(&mut self) {
@@ -117,11 +121,12 @@ impl<'a, W> Tickable<W> for Decorator<'a, W> {
 /// # use aspen::Status;
 /// # use aspen::node::Tickable;
 /// let mut node = Invert::new(AlwaysFail::new());
-/// assert_eq!(node.tick(&mut ()), Status::Succeeded);
+/// assert_eq!(node.tick(&mut (), 0), Status::Succeeded);
 /// ```
 pub struct Invert<'a, W> {
     /// Child node.
     child: Node<'a, W>,
+	last_tick: usize,
 }
 impl<'a, W> Invert<'a, W>
 where
@@ -129,12 +134,13 @@ where
 {
     /// Creates a new `Invert` node.
     pub fn new(child: Node<'a, W>) -> Node<'a, W> {
-        Node::new(Invert { child: child })
+        Node::new(Invert { child: child, last_tick: 0 })
     }
 }
 impl<'a, W> Tickable<W> for Invert<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
-        match self.child.tick(world) {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
+        match self.child.tick(world, tick) {
             Status::Succeeded => Status::Failed,
             Status::Failed => Status::Succeeded,
             s @ _ => s,
@@ -194,21 +200,21 @@ mod tests {
         // Test the first rotation
         let suc_child = YesTick::new(Status::Succeeded);
         let mut suc_dec = Decorator::new(suc_child, rotate);
-        let suc_status = suc_dec.tick(&mut ());
+        let suc_status = suc_dec.tick(&mut (), 0);
         drop(suc_dec);
         assert_eq!(suc_status, rotate(Status::Succeeded, &()));
 
         // Test the second rotation
         let run_child = YesTick::new(Status::Running);
         let mut run_dec = Decorator::new(run_child, rotate);
-        let run_status = run_dec.tick(&mut ());
+        let run_status = run_dec.tick(&mut (), 0);
         drop(run_dec);
         assert_eq!(run_status, rotate(Status::Running, &()));
 
         // Test the final rotation
         let fail_child = YesTick::new(Status::Failed);
         let mut fail_dec = Decorator::new(fail_child, rotate);
-        let fail_status = fail_dec.tick(&mut ());
+        let fail_status = fail_dec.tick(&mut (), 0);
         drop(fail_dec);
         assert_eq!(fail_status, rotate(Status::Failed, &()));
     }
@@ -216,7 +222,7 @@ mod tests {
     #[test]
     fn invert_success_to_failure() {
         let mut s2f = Invert::new(YesTick::new(Status::Failed));
-        let s2fs = s2f.tick(&mut ());
+        let s2fs = s2f.tick(&mut (), 0);
         drop(s2f);
         assert_eq!(s2fs, Status::Succeeded);
     }
@@ -224,7 +230,7 @@ mod tests {
     #[test]
     fn invert_failure_to_success() {
         let mut f2s = Invert::new(YesTick::new(Status::Succeeded));
-        let f2ss = f2s.tick(&mut ());
+        let f2ss = f2s.tick(&mut (), 0);
         drop(f2s);
         assert_eq!(f2ss, Status::Failed);
     }
@@ -232,7 +238,7 @@ mod tests {
     #[test]
     fn invert_running_as_running() {
         let mut r = Invert::new(YesTick::new(Status::Running));
-        let rs = r.tick(&mut ());
+        let rs = r.tick(&mut (), 0);
         drop(r);
         assert_eq!(rs, Status::Running);
     }

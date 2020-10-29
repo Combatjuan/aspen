@@ -57,7 +57,7 @@ use std::thread;
 /// });
 ///
 /// // Run the node until it completes
-/// while !action.tick(&mut result).is_done() { };
+/// while !action.tick(&mut result, 0).is_done() { };
 /// assert_eq!(action.status().unwrap(), Status::Succeeded);
 /// assert_eq!(result.load(Ordering::SeqCst), 90);
 /// ```
@@ -70,6 +70,8 @@ where
 
     /// Channel on which the task will communicate.
     rx: Option<mpsc::Receiver<Status>>,
+
+	last_tick: usize,
 }
 impl<W> Action<W>
 where
@@ -83,6 +85,7 @@ where
         let internals = Action {
             func: Arc::new(task),
             rx: None,
+			last_tick: 0,
         };
 
         Node::new(internals)
@@ -113,7 +116,8 @@ where
     /// The first time being ticked after being reset (or initialized), it will
     /// clone `world` and use the clone as the argument for the task function,
     /// which will be run in a separate thread. Usually, this should be an `Arc`.
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         let (status, reset) = if let Some(ref mut rx) = self.rx {
             match rx.try_recv() {
                 Ok(Status::Running) => (Status::Running, true),
@@ -214,12 +218,13 @@ macro_rules! Action {
 ///     } else { Status::Failed }
 /// });
 ///
-/// assert_eq!(action.tick(&mut result), Status::Succeeded);
+/// assert_eq!(action.tick(&mut result, 0), Status::Succeeded);
 /// assert_eq!(result, 90);
 /// ```
 pub struct InlineAction<'a, W> {
     /// The task which is to be run.
     func: Box<dyn FnMut(&mut W) -> Status + 'a>,
+	last_tick: usize,
 }
 impl<'a, W> InlineAction<'a, W>
 where
@@ -232,13 +237,15 @@ where
     {
         let internals = InlineAction {
             func: Box::new(task),
+			last_tick: 0,
         };
 
         Node::new(internals)
     }
 }
 impl<'a, W> Tickable<W> for InlineAction<'a, W> {
-    fn tick(&mut self, world: &mut W) -> Status {
+    fn tick(&mut self, world: &mut W, tick: usize) -> Status {
+		self.last_tick = tick;
         (*self.func)(world)
     }
 
@@ -291,7 +298,7 @@ mod test {
         });
 
         for _ in 0..5 {
-            assert_eq!(action.tick(&mut ()), Status::Running);
+            assert_eq!(action.tick(&mut (), 0), Status::Running);
             thread::sleep(time::Duration::from_millis(100));
         }
 
@@ -299,7 +306,7 @@ mod test {
 
         let mut status = Status::Running;
         while status == Status::Running {
-            status = action.tick(&mut ());
+            status = action.tick(&mut (), 0);
         }
 
         assert_eq!(status, Status::Failed);
@@ -316,7 +323,7 @@ mod test {
         });
 
         for _ in 0..5 {
-            assert_eq!(action.tick(&mut ()), Status::Running);
+            assert_eq!(action.tick(&mut (), 0), Status::Running);
             thread::sleep(time::Duration::from_millis(100));
         }
 
@@ -324,7 +331,7 @@ mod test {
 
         let mut status = Status::Running;
         while status == Status::Running {
-            status = action.tick(&mut ());
+            status = action.tick(&mut (), 0);
         }
 
         assert_eq!(status, Status::Succeeded);
@@ -333,7 +340,7 @@ mod test {
     #[test]
     fn inline_failure() {
         assert_eq!(
-            InlineAction::new(|_| Status::Failed).tick(&mut ()),
+            InlineAction::new(|_| Status::Failed).tick(&mut (), 0),
             Status::Failed
         );
     }
@@ -341,7 +348,7 @@ mod test {
     #[test]
     fn inline_success() {
         assert_eq!(
-            InlineAction::new(|_| Status::Succeeded).tick(&mut ()),
+            InlineAction::new(|_| Status::Succeeded).tick(&mut (), 0),
             Status::Succeeded
         );
     }
@@ -349,7 +356,7 @@ mod test {
     #[test]
     fn inline_running() {
         assert_eq!(
-            InlineAction::new(|_| Status::Running).tick(&mut ()),
+            InlineAction::new(|_| Status::Running).tick(&mut (), 0),
             Status::Running
         );
     }
