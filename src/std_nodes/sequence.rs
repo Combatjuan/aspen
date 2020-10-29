@@ -89,6 +89,12 @@ impl<'a, W> ActiveSequence<'a, W>
 where
     W: 'a,
 {
+    ///// Creates a new `ActiveSequence` node from a vector of Nodes.
+    //pub fn new() -> Self {
+        //ActiveSequence {
+            //children: Vec::new(),
+        //}
+    //}
     /// Creates a new `ActiveSequence` node from a vector of Nodes.
     pub fn new(children: Vec<Node<'a, W>>) -> Node<'a, W> {
         let internals = ActiveSequence {
@@ -116,7 +122,6 @@ where
 impl<'a, W> Tickable<W> for ActiveSequence<'a, W> {
     fn tick(&mut self, world: &mut W) -> Status {
         // Tick all of our children as long as they succeed
-		println!("Active Sequence Tick:");
         let mut ret_status = Status::Succeeded;
         for child in self.children.iter_mut() {
             if ret_status == Status::Succeeded {
