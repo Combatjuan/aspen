@@ -65,19 +65,32 @@ impl<'a, W> Node<'a, W> {
     }
 
     /// Sets the name for this particular node.
-    pub fn named<T: Into<String>>(mut self, name: Option<T>) -> Node<'a, W> {
+    pub fn named<T: Into<String>>(mut self, name: T) -> Node<'a, W> {
         // We consume the node and return it to fit better into the current
         // pattern of making trees. By using a reference, named nodes would not
         // be able to be made inline. This also makes the macros look much nicer.
-        let new_name = name.map(|x| x.into());
-        if let Some(ref s) = new_name {
-            trace!("Renaming node from {} to {}", self.name(), s);
-        } else {
-            trace!("Removing name from {}", self.name());
-        }
-        self.name = new_name;
-        self
+        let new_name = name.into();
+		if new_name.is_empty() {
+			self.name = None
+		} else {
+			self.name = Some(new_name);
+		}
+		self
     }
+
+//    pub fn named<T: Into<String>>(mut self, name: Option<T>) -> Node<'a, W> {
+//        // We consume the node and return it to fit better into the current
+//        // pattern of making trees. By using a reference, named nodes would not
+//        // be able to be made inline. This also makes the macros look much nicer.
+//        let new_name = name.map(|x| x.into());
+//        if let Some(ref s) = new_name {
+//            trace!("Renaming node from {} to {}", self.name(), s);
+//        } else {
+//            trace!("Removing name from {}", self.name());
+//        }
+//        self.name = new_name;
+//        self
+//    }
 }
 
 impl<'a, W> Tickable<W> for Node<'a, W> {
@@ -129,17 +142,18 @@ impl<'a, W> Tickable<W> for Node<'a, W> {
 
 impl<'a, W> fmt::Display for Node<'a, W> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}-{}:({:?}",
-			self.name(),
-			self.last_tick,
-			self.status()
-		)?;
+        write!(f, "{}:({:?}", self.name(), self.status())?;
+//        write!(f, "{}-{}:({:?}",
+//            self.name(),
+//            self.last_tick,
+//            self.status()
+//        )?;
 		unsafe {
 			INDENT += 1;
 			for child in self.children() {
 				write!(f, ",\n")?;
 				for _i in 0..INDENT {
-					write!(f, "	")?;
+					write!(f, "  ")?;
 				}
 				write!(f, "{}", child)?;
 			}
