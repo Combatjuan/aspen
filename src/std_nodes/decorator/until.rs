@@ -284,7 +284,9 @@ impl<'a, W> Tickable<W> for UntilSuccess<'a, W> {
 		self.last_tick = tick;
         // Take care of the infinite version so we don't have to worry
         if self.attempt_limit.is_none() {
-            return if self.child.tick(world, tick) == Status::Succeeded {
+			let child_status = self.child.tick(world, tick);
+			let child_succeeded = child_status == Status::Succeeded;
+            return if child_succeeded {
                 Status::Succeeded
             } else {
                 Status::Running
@@ -402,7 +404,7 @@ mod tests {
         for _ in 0..(limit - 1) {
             assert_eq!(node.tick(&mut (), 0), Status::Running);
         }
-        let status = node.tick(&mut (), 0);
+        let status = node.tick(&mut ());
         drop(node);
         assert_eq!(status, Status::Failed);
     }
